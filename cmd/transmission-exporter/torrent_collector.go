@@ -1,11 +1,15 @@
 package main
 
 import (
+	"context"
 	"log"
 	"strconv"
+	"time"
+
+	"github.com/hekmon/transmissionrpc/v3"
+	"github.com/prometheus/client_golang/prometheus"
 
 	transmission "github.com/metalmatze/transmission-exporter"
-	"github.com/prometheus/client_golang/prometheus"
 )
 
 const (
@@ -126,7 +130,10 @@ func (tc *TorrentCollector) Describe(ch chan<- *prometheus.Desc) {
 
 // Collect implements the prometheus.Collector interface
 func (tc *TorrentCollector) Collect(ch chan<- prometheus.Metric) {
-	torrents, err := tc.client.GetTorrents()
+	ctx, cancel := context.WithTimeout(context.Background(), 5*time.Second)
+	defer cancel()
+
+	torrents, err := tc.client.GetTorrents(ctx)
 	if err != nil {
 		log.Printf("failed to get torrents: %v", err)
 		return
@@ -135,62 +142,62 @@ func (tc *TorrentCollector) Collect(ch chan<- prometheus.Metric) {
 	for _, t := range torrents {
 		var finished float64
 
-		id := strconv.Itoa(t.ID)
+		id := strconv.Itoa(int(*t.ID))
 
-		if t.IsFinished {
+		if *t.IsFinished {
 			finished = 1
 		}
 
 		ch <- prometheus.MustNewConstMetric(
 			tc.Status,
 			prometheus.GaugeValue,
-			float64(t.Status),
-			id, t.Name,
+			float64(*t.Status),
+			id, *t.Name,
 		)
 		ch <- prometheus.MustNewConstMetric(
 			tc.Added,
 			prometheus.GaugeValue,
-			float64(t.Added),
-			id, t.Name,
+			float64(t.AddedDate.Unix()),
+			id, *t.Name,
 		)
 		ch <- prometheus.MustNewConstMetric(
 			tc.Files,
 			prometheus.GaugeValue,
 			float64(len(t.Files)),
-			id, t.Name,
+			id, *t.Name,
 		)
 		ch <- prometheus.MustNewConstMetric(
 			tc.Finished,
 			prometheus.GaugeValue,
 			finished,
-			id, t.Name,
+			id, *t.Name,
 		)
 		ch <- prometheus.MustNewConstMetric(
 			tc.Done,
 			prometheus.GaugeValue,
-			t.PercentDone,
-			id, t.Name,
+			*t.PercentDone,
+			id, *t.Name,
 		)
 		ch <- prometheus.MustNewConstMetric(
 			tc.Ratio,
 			prometheus.GaugeValue,
-			t.UploadRatio,
-			id, t.Name,
+			*t.UploadRatio,
+			id, *t.Name,
 		)
 		ch <- prometheus.MustNewConstMetric(
 			tc.Download,
 			prometheus.GaugeValue,
-			float64(t.RateDownload),
-			id, t.Name,
+			float64(*t.RateDownload),
+			id, *t.Name,
 		)
 		ch <- prometheus.MustNewConstMetric(
 			tc.Upload,
 			prometheus.GaugeValue,
-			float64(t.RateUpload),
-			id, t.Name,
+			float64(*t.RateUpload),
+			id, *t.Name,
 		)
 
-		tstats := make(map[string]transmission.TrackerStat)
+		tstats := make(map[string]transmissionrpc.TrackerStats)
 
 		for _, tracker := range t.TrackerStats {
 			if tr, exists := tstats[tracker.Host]; exists {
@@ -205,21 +212,21 @@ func (tc *TorrentCollector) Collect(ch chan<- prometheus.Metric) {
 				tc.Downloads,
 				prometheus.GaugeValue,
 				float64(tracker.DownloadCount),
-				id, t.Name, tracker.Host,
+				id, *t.Name, tracker.Host,
 			)
 
 			ch <- prometheus.MustNewConstMetric(
 				tc.Leechers,
 				prometheus.GaugeValue,
 				float64(tracker.LeecherCount),
-				id, t.Name, tracker.Host,
+				id, *t.Name, tracker.Host,
 			)
 
 			ch <- prometheus.MustNewConstMetric(
 				tc.Seeders,
 				prometheus.GaugeValue,
 				float64(tracker.SeederCount),
-				id, t.Name, tracker.Host,
+				id, *t.Name, tracker.Host,
 			)
 		}
 	}

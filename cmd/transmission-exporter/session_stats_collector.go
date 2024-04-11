@@ -1,11 +1,14 @@
 package main
 
 import (
+	"context"
 	"log"
 	"time"
 
-	"github.com/metalmatze/transmission-exporter"
+	"github.com/hekmon/transmissionrpc/v3"
 	"github.com/prometheus/client_golang/prometheus"
+
+	"github.com/metalmatze/transmission-exporter"
 )
 
 // SessionStatsCollector exposes SessionStats as metrics
@@ -107,7 +110,10 @@ func (sc *SessionStatsCollector) Describe(ch chan<- *prometheus.Desc) {
 
 // Collect implements the prometheus.Collector interface
 func (sc *SessionStatsCollector) Collect(ch chan<- prometheus.Metric) {
-	stats, err := sc.client.GetSessionStats()
+	ctx, cancel := context.WithTimeout(context.Background(), 5*time.Second)
+	defer cancel()
+
+	stats, err := sc.client.GetSessionStats(ctx)
 	if err != nil {
 		log.Printf("failed to get session stats: %v", err)
 	}
@@ -140,7 +146,7 @@ func (sc *SessionStatsCollector) Collect(ch chan<- prometheus.Metric) {
 
 	types := []string{"current", "cumulative"}
 	for _, t := range types {
-		var stateStats transmission.SessionStateStats
+		var stateStats transmissionrpc.SessionStatsDetails
 		if t == types[0] {
 			stateStats = stats.CurrentStats
 		} else {

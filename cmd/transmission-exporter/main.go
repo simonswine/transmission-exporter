@@ -8,6 +8,7 @@ import (
 	"github.com/joho/godotenv"
 	transmission "github.com/metalmatze/transmission-exporter"
 	"github.com/prometheus/client_golang/prometheus"
+	"github.com/prometheus/client_golang/prometheus/promhttp"
 )
 
 // Config gets its content from env and passes it on to different packages
@@ -43,16 +44,19 @@ func main() {
 		}
 	}
 
-	client := transmission.New(c.TransmissionAddr, user)
+	client, err := transmission.New(c.TransmissionAddr, user)
+	if err != nil {
+		log.Println("unable to create transmission client:", err)
+	}
 
 	prometheus.MustRegister(NewTorrentCollector(client))
 	prometheus.MustRegister(NewSessionCollector(client))
 	prometheus.MustRegister(NewSessionStatsCollector(client))
 
-	http.Handle(c.WebPath, prometheus.Handler())
+	http.Handle(c.WebPath, promhttp.Handler())
 
 	http.HandleFunc("/", func(w http.ResponseWriter, r *http.Request) {
-		w.Write([]byte(`<html>
+		_, _ = w.Write([]byte(`<html>
 			<head><title>Node Exporter</title></head>
 			<body>
 			<h1>Transmission Exporter</h1>
