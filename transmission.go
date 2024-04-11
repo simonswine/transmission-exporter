@@ -87,3 +87,8 @@ func (c *Client) GetSessionStats(ctx context.Context) (transmissionrpc.SessionSt
 func (c *Client) FreeSpace(ctx context.Context, path string) (free, totat cunits.Bits, err error) {
 	return c.tbt.FreeSpace(ctx, path)
 }
+
+// TestPort tests the port
+func (c *Client) TestPort(ctx context.Context) (bool, error) {
+	return c.tbt.PortTest(ctx)
+}

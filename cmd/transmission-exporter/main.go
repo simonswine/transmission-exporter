@@ -3,6 +3,7 @@ package main
 import (
 	"log"
 	"net/http"
+	"time"
 
 	arg "github.com/alexflint/go-arg"
 	"github.com/joho/godotenv"
@@ -13,11 +14,12 @@ import (
 
 // Config gets its content from env and passes it on to different packages
 type Config struct {
-	TransmissionAddr     string `arg:"env:TRANSMISSION_ADDR"`
-	TransmissionPassword string `arg:"env:TRANSMISSION_PASSWORD"`
-	TransmissionUsername string `arg:"env:TRANSMISSION_USERNAME"`
-	WebAddr              string `arg:"env:WEB_ADDR"`
-	WebPath              string `arg:"env:WEB_PATH"`
+	TransmissionAddr             string        `arg:"env:TRANSMISSION_ADDR"`
+	TransmissionPassword         string        `arg:"env:TRANSMISSION_PASSWORD"`
+	TransmissionUsername         string        `arg:"env:TRANSMISSION_USERNAME"`
+	TransmissionPortTestInterval time.Duration `arg:"env:TRANSMISSION_PORT_TEST_INTERVAL"`
+	WebAddr                      string        `arg:"env:WEB_ADDR"`
+	WebPath                      string        `arg:"env:WEB_PATH"`
 }
 
 func main() {
@@ -29,9 +31,10 @@ func main() {
 	}
 
 	c := Config{
-		WebPath:          "/metrics",
-		WebAddr:          ":19091",
-		TransmissionAddr: "http://localhost:9091",
+		TransmissionPortTestInterval: 20 * time.Minute,
+		WebPath:                      "/metrics",
+		WebAddr:                      ":19091",
+		TransmissionAddr:             "http://localhost:9091",
 	}
 
 	arg.MustParse(&c)
@@ -52,9 +55,11 @@ func main() {
 	prometheus.MustRegister(NewTorrentCollector(client))
 	prometheus.MustRegister(NewSessionCollector(client))
 	prometheus.MustRegister(NewSessionStatsCollector(client))
+	if c.TransmissionPortTestInterval > 0 {
+		prometheus.MustRegister(NewPortStatusCollector(client, c.TransmissionPortTestInterval))
+	}
 
 	http.Handle(c.WebPath, promhttp.Handler())
-
 	http.HandleFunc("/", func(w http.ResponseWriter, r *http.Request) {
 		_, _ = w.Write([]byte(`<html>
 			<head><title>Node Exporter</title></head>
